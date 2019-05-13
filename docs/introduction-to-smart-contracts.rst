@@ -116,7 +116,8 @@ registering with a username and password, all you need is an Ethereum keypair.
 
 This contract introduces some new concepts, let us go through them one by one.
 
-The line ``address public minter;`` declares a state variable of type :ref:`address<address>`. The ``address`` type is a 160-bit value that does not allow any arithmetic operations.
+The line ``address public minter;`` declares a state variable of type :ref:`address<address>`.
+The ``address`` type is a 160-bit value that does not allow any arithmetic operations.
 It is suitable for storing addresses of contracts, or of keypairs belonging to external persons.
 
 The keyword ``public`` automatically generates a function that allows you to access the current value of the state
@@ -183,13 +184,17 @@ JavaScript code, which uses `web3.js <https://github.com/ethereum/web3.js/>`_ to
 
 The :ref:`constructor<constructor>` is a special function run during the creation of the contract and
 cannot be called afterwards. It permanently stores the address of the person creating the
-contract. The ``msg`` variable (together with ``tx`` and ``block``) is :ref:`special global variable <special-variables-functions>` that
+contract. The ``msg`` variable (together with ``tx`` and ``block``) is a
+:ref:`special global variable <special-variables-functions>` that
 contains properties which allow access to the blockchain. ``msg.sender`` is
 always the address where the current (external) function call came from.
 
 The functions that make up the contract, and that users and contracts can call are ``mint`` and ``send``.
 
-The ``mint`` function sends an amount of newly created coins from the account that created the contract to another address. The :ref:`require <assert-and-require>` function defines conditions that throw an exception if not met, and reverts all changes. In this example, ``require(msg.sender == minter);`` ensures that only the creator of the contract can call ``mint``, and ``require(amount < 1e60);`` ensures a maximum amount of tokens, which could cause overflow errors in the future.
+The ``mint`` function sends an amount of newly created coins from the account that created the contract to another address.
+The :ref:`require <assert-and-require>` function defines conditions that throw an exception if not met, and reverts all changes. In
+this example, ``require(msg.sender == minter);`` ensures that only the creator of the contract can call ``mint``,
+and ``require(amount < 1e60);`` ensures a maximum amount of tokens, which could cause overflow errors in the future.
 
 The ``send`` function can be used by anyone (who already
 has some of these coins) to send coins to anyone else. If the sender does not have
