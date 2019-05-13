@@ -72,32 +72,40 @@ Subcurrency Example
 ===================
 
 The following contract implements the simplest form of a
-cryptocurrency. It is possible to generate coins out of thin air, but
-only the person that created the contract is able to do that (it is possible
-to implement a different issuance scheme).
-Furthermore, anyone can send coins to each other without a need for
-registering with username and password, all you need is an Ethereum keypair.
+cryptocurrency. The contract allows only its creator to create new coins (different issuance scheme are possible).
+Anyone can send coins to each other without a need for
+registering with a username and password, all you need is an Ethereum keypair.
 
 ::
 
     pragma solidity >=0.5.0 <0.7.0;
 
     contract Coin {
+        // The keyword "public" makes variables
+        // accessible from other contracts
         address public minter;
         mapping (address => uint) public balances;
 
+        // Events allow clients to react to specific
+        // contract changes you declare
         event Sent(address from, address to, uint amount);
 
+        // Constructor code is only run when the contract
+        // is created
         constructor() public {
             minter = msg.sender;
         }
 
+        // Sends an amount of newly created coins
+        // from the contract creator to an address
         function mint(address receiver, uint amount) public {
             require(msg.sender == minter);
             require(amount < 1e60);
             balances[receiver] += amount;
         }
 
+        // Sends an amount of existing coins
+        // from any caller to an address
         function send(address receiver, uint amount) public {
             require(amount <= balances[msg.sender], "Insufficient balance.");
             balances[msg.sender] -= amount;
@@ -108,8 +116,7 @@ registering with username and password, all you need is an Ethereum keypair.
 
 This contract introduces some new concepts, let us go through them one by one.
 
-The line ``address public minter;`` declares a state variable of type :ref:`address<address>`
-that is publicly accessible. The ``address`` type is a 160-bit value that does not allow any arithmetic operations.
+The line ``address public minter;`` declares a state variable of type :ref:`address<address>`. The ``address`` type is a 160-bit value that does not allow any arithmetic operations.
 It is suitable for storing addresses of contracts, or of keypairs belonging to external persons.
 
 The keyword ``public`` automatically generates a function that allows you to access the current value of the state
@@ -120,24 +127,23 @@ to the following (ignore ``external`` and ``view`` for now)::
     function minter() external view returns (address) { return minter; }
 
 You could add a function like the above yourself, but you would have a function and state variable with the same name.
-You don't need to do this, the compiler figures it out for you.
+You do not need to do this, the compiler figures it out for you.
 
 .. index:: mapping
 
 The next line, ``mapping (address => uint) public balances;`` also
 creates a public state variable, but it is a more complex datatype.
-The :ref:`mapping <mapping-types>` type maps addresses to unsigned integers.
+The :ref:`mapping <mapping-types>` type maps addresses to :ref:`unsigned integers <integers>`.
 
 Mappings can be seen as `hash tables <https://en.wikipedia.org/wiki/Hash_table>`_ which are
 virtually initialised such that every possible key exists from the start and is mapped to a
-value whose byte-representation is all zeros. This analogy does not go
-far, as it is neither possible to obtain a list of all keys of
+value whose byte-representation is all zeros. However, it is neither possible to obtain a list of all keys of
 a mapping, nor a list of all values. Keep in mind what you
 added to the mapping or use it in a context where this is not needed. Or
-even better, keep a list, or use a more advanced data type.
+even better, keep a list, or use a more suitable data type.
 
 The :ref:`getter function<getter-functions>` created by the ``public`` keyword
-is more complex in this case. It looks roughly like the
+is more complex in the case of a mapping. It looks like the
 following::
 
     function balances(address _account) external view returns (uint) {
@@ -149,10 +155,10 @@ You can use this function to query the balance of a single account.
 .. index:: event
 
 The line ``event Sent(address from, address to, uint amount);`` declares
-an "event", which is emitted in the last line of the function
-``send``. Light Ethereum clients such as user interfaces can
-listen for these events being emitted on the blockchain without much
-cost. As soon as it is emitted, the listener receives the
+an :ref:`"event" <events>`, which is emitted in the last line of the function
+``send``. Light Ethereum clients such as web applications can
+listen for these events emitted on the blockchain without much
+gas cost. As soon as it is emitted, the listener receives the
 arguments ``from``, ``to`` and ``amount``, which makes it possible to track
 transactions.
 
@@ -177,21 +183,18 @@ JavaScript code, which uses `web3.js <https://github.com/ethereum/web3.js/>`_ to
 
 The :ref:`constructor<constructor>` is a special function run during the creation of the contract and
 cannot be called afterwards. It permanently stores the address of the person creating the
-contract: ``msg`` (together with ``tx`` and ``block``) is a special global variable that
+contract. The ``msg`` variable (together with ``tx`` and ``block``) is :ref:`special global variable <special-variables-functions>` that
 contains properties which allow access to the blockchain. ``msg.sender`` is
 always the address where the current (external) function call came from.
 
 The functions that make up the contract, and that users and contracts can call are ``mint`` and ``send``.
-If ``mint`` is called by anyone except the account that created the contract,
-nothing happens. This is ensured by the special function :ref:`require <assert-and-require>`  which
-causes all changes to be reverted if its argument evaluates to false.
-The second call to ``require`` ensures that there will not be too many coins,
-which could cause overflow errors later.
+
+The ``mint`` function sends an amount of newly created coins from the account that created the contract to another address. The :ref:`require <assert-and-require>` function defines conditions that throw an exception if not met, and reverts all changes. In this example, ``require(msg.sender == minter);`` ensures that only the creator of the contract can call ``mint``, and ``require(amount < 1e60);`` ensures a maximum amount of tokens, which could cause overflow errors in the future.
 
 The ``send`` function can be used by anyone (who already
-has some of these coins) to send coins to anyone else. If you do not have
+has some of these coins) to send coins to anyone else. If the sender does not have
 enough coins to send, the ``require`` call fails and provides the
-user with an appropriate error message string.
+sender with an appropriate error message string.
 
 .. note::
     If you use
