@@ -24,6 +24,7 @@
 #include <libyul/optimiser/VarDeclInitializer.h>
 #include <libyul/optimiser/BlockFlattener.h>
 #include <libyul/optimiser/ControlFlowSimplifier.h>
+#include <libyul/optimiser/ConstantOptimiser.h>
 #include <libyul/optimiser/DeadCodeEliminator.h>
 #include <libyul/optimiser/FunctionGrouper.h>
 #include <libyul/optimiser/FunctionHoister.h>
@@ -59,6 +60,7 @@ using namespace yul;
 
 void OptimiserSuite::run(
 	shared_ptr<Dialect> const& _dialect,
+	GasMeter const& _meter,
 	Block& _ast,
 	AsmAnalysisInfo const& _analysisInfo,
 	bool _optimizeStackAllocation,
@@ -206,6 +208,8 @@ void OptimiserSuite::run(
 	ControlFlowSimplifier{}(ast);
 
 	FunctionGrouper{}(ast);
+
+	ConstantOptimiser{*_dialect, _meter}(ast);
 	VarNameCleaner{ast, *_dialect, reservedIdentifiers}(ast);
 	yul::AsmAnalyzer::analyzeStrictAssertCorrect(_dialect, ast);
 

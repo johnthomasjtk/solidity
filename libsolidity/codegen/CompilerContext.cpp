@@ -33,6 +33,7 @@
 #include <libyul/backends/evm/AsmCodeGen.h>
 #include <libyul/backends/evm/EVMDialect.h>
 #include <libyul/optimiser/Suite.h>
+#include <libyul/optimiser/Metrics.h>
 #include <libyul/YulString.h>
 
 #include <liblangutil/ErrorReporter.h>
@@ -419,8 +420,10 @@ void CompilerContext::appendInlineAssembly(
 	// so we essentially only optimize the ABI functions.
 	if (_optimiserSettings.runYulOptimiser && _localVariables.empty())
 	{
+		bool const isCreation = m_runtimeContext != nullptr;
 		yul::OptimiserSuite::run(
 			yul::EVMDialect::strictAssemblyForEVM(m_evmVersion),
+			yul::GasMeter(m_evmVersion, isCreation, _optimiserSettings.expectedExecutionsPerDeployment),
 			*parserResult,
 			analysisInfo,
 			_optimiserSettings.optimizeStackAllocation,
