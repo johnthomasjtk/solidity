@@ -67,7 +67,7 @@ latest released version, and ``nightly`` for potentially unstable changes in the
 
     docker run ethereum/solc:stable
 
-You can also specify specific release build versions in the tag, for example, for the 0.5.4 release.
+You can also specify a release build version in the tag, for example, for the 0.5.4 release.
 
 .. code-block:: bash
 
