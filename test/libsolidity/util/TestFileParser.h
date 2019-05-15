@@ -19,6 +19,7 @@
 #include <liblangutil/Exceptions.h>
 
 #include <iosfwd>
+#include <iterator>
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -308,16 +309,27 @@ private:
 		using TokenDesc = std::pair<Token, std::string>;
 
 		/// Advances current position in the input stream.
-		void advance() { ++m_char; }
-		/// Returns the current character.
-		char current() const { return *m_char; }
-		/// Peeks the next character.
-		char peek() const { auto it = m_char; return *(it + 1); }
+		void advance() {
+			solAssert(m_char != m_line.end(), "Cannot advance beyond end.");
+			++m_char;
+		}
+
+		/// Returns the current character or EOS if at end of input.
+		char current() const {
+			if (m_char == m_line.end())
+				return '\0';
+
+			return *m_char;
+		}
+
+		/// Peeks the next character or EOS if that would be at (or beyond) the end of input.
+		char peek() const;
+
 		/// Returns true if the end of a line is reached, false otherwise.
 		bool isEndOfLine() const { return m_char == m_line.end(); }
 
 		std::string m_line;
-		std::string::iterator m_char;
+		std::string::const_iterator m_char;
 
 		std::string m_currentLiteral;
 
