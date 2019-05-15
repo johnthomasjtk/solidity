@@ -73,7 +73,7 @@ You can also specify a release build version in the tag, for example, for the 0.
 
     docker run ethereum/solc:0.5.4
 
-The Docker images contains the compiler executable, so you can pass all compiler arguments to it. For example.
+The Docker image contains the compiler executable, so you can pass all compiler arguments to it. For example.
 
 .. code-block:: bash
 
