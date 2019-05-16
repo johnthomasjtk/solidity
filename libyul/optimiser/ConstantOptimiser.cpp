@@ -15,7 +15,7 @@
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * Optimisation stage that removes unused variables and functions.
+ * Optimisation stage that replaces constants by expressions that compute them.
  */
 
 #include <libyul/optimiser/ConstantOptimiser.h>
@@ -42,14 +42,11 @@ void ConstantOptimiser::visit(Expression& _e)
 		Literal const& literal = boost::get<Literal>(_e);
 		if (literal.kind != LiteralKind::Number)
 			return;
-		u256 value = valueOfLiteral(literal);
-		if (value < 0x10000)
-			return;
 
 		if (
 			Expression const* repr =
-			RepresentationFinder(m_evmVersion, m_meter, locationOf(_e), m_cache)
-			.tryFindRepresentation(value)
+				RepresentationFinder(m_evmVersion, m_meter, locationOf(_e), m_cache)
+				.tryFindRepresentation(valueOfLiteral(literal))
 		)
 			_e = ASTCopier{}.translate(*repr);
 	}
@@ -62,79 +59,72 @@ Expression const* RepresentationFinder::tryFindRepresentation(dev::u256 const& _
 	if (_value < 0x10000)
 		return nullptr;
 
-	Representation repr = findRepresentation(_value);
+	Representation const& repr = findRepresentation(_value);
 	if (repr.expression->type() == typeid(Literal))
 		return nullptr;
 	else
 		return repr.expression.get();
 }
 
-Representation RepresentationFinder::findRepresentation(dev::u256 const& _value)
+Representation const& RepresentationFinder::findRepresentation(dev::u256 const& _value)
 {
 	if (m_cache.count(_value))
 		return m_cache.at(_value);
 
-	Representation routine;
-	if (_value <= 0x10000)
-		routine = min(move(routine), represent(_value));
-	else if (dev::bytesRequired(~_value) < dev::bytesRequired(_value))
+	Representation routine = represent(_value);
+
+	if (dev::bytesRequired(~_value) < dev::bytesRequired(_value))
 		// Negated is shorter to represent
 		routine = min(move(routine), represent("not", findRepresentation(~_value)));
-	else
+
+	// Decompose value into a * 2**k + b where abs(b) << 2**k
+	for (unsigned bits = 255; bits > 8 && m_maxSteps > 0; --bits)
 	{
-		// Decompose value into a * 2**k + b where abs(b) << 2**k
-		// Is not always better, try literal and decomposition method.
-		routine = represent(_value);
+		unsigned gapDetector = unsigned((_value >> (bits - 8)) & 0x1ff);
+		if (gapDetector != 0xff && gapDetector != 0x100)
+			continue;
 
-		for (unsigned bits = 255; bits > 8 && m_maxSteps > 0; --bits)
+		u256 powerOfTwo = u256(1) << bits;
+		u256 upperPart = _value >> bits;
+		bigint lowerPart = _value & (powerOfTwo - 1);
+		if ((powerOfTwo - lowerPart) < lowerPart)
 		{
-			unsigned gapDetector = unsigned((_value >> (bits - 8)) & 0x1ff);
-			if (gapDetector != 0xff && gapDetector != 0x100)
-				continue;
-
-			u256 powerOfTwo = u256(1) << bits;
-			u256 upperPart = _value >> bits;
-			bigint lowerPart = _value & (powerOfTwo - 1);
-			if ((powerOfTwo - lowerPart) < lowerPart)
-			{
-				lowerPart = lowerPart - powerOfTwo; // make it negative
-				upperPart++;
-			}
-			if (upperPart == 0)
-				continue;
-			if (abs(lowerPart) >= (powerOfTwo >> 8))
-				continue;
-			Representation newRoutine;
-			if (m_evmVersion.hasBitwiseShifting())
-				newRoutine = represent("shl", represent(bits), findRepresentation(upperPart));
-			else
-			{
-				newRoutine = represent("exp", represent(2), represent(bits));
-				if (upperPart != 1)
-					newRoutine = represent("mul", findRepresentation(upperPart), newRoutine);
-			}
-
-			if (newRoutine.cost >= routine.cost)
-				continue;
-
-			if (lowerPart > 0)
-				newRoutine = represent("add", newRoutine, findRepresentation(u256(abs(lowerPart))));
-			else if (lowerPart < 0)
-				newRoutine = represent("sub", newRoutine, findRepresentation(u256(abs(lowerPart))));
-
-			if (m_maxSteps > 0)
-				m_maxSteps--;
-			routine = min(move(routine), move(newRoutine));
+			lowerPart = lowerPart - powerOfTwo; // make it negative
+			upperPart++;
 		}
+		if (upperPart == 0)
+			continue;
+		if (abs(lowerPart) >= (powerOfTwo >> 8))
+			continue;
+		Representation newRoutine;
+		if (m_evmVersion.hasBitwiseShifting())
+			newRoutine = represent("shl", represent(bits), findRepresentation(upperPart));
+		else
+		{
+			newRoutine = represent("exp", represent(2), represent(bits));
+			if (upperPart != 1)
+				newRoutine = represent("mul", findRepresentation(upperPart), newRoutine);
+		}
+
+		if (newRoutine.cost >= routine.cost)
+			continue;
+
+		if (lowerPart > 0)
+			newRoutine = represent("add", newRoutine, findRepresentation(u256(abs(lowerPart))));
+		else if (lowerPart < 0)
+			newRoutine = represent("sub", newRoutine, findRepresentation(u256(abs(lowerPart))));
+
+		if (m_maxSteps > 0)
+			m_maxSteps--;
+		routine = min(move(routine), move(newRoutine));
 	}
-	m_cache[_value] = routine;
-	return routine;
+	return m_cache[_value] = move(routine);
 }
 
 Representation RepresentationFinder::represent(dev::u256 const& _value) const
 {
 	Representation repr;
-	repr.expression = make_shared<Expression>(Literal{m_location, LiteralKind::Number, YulString{formatNumber(_value)}, {}});
+	repr.expression = make_unique<Expression>(Literal{m_location, LiteralKind::Number, YulString{formatNumber(_value)}, {}});
 	repr.cost = m_meter.costs(*repr.expression);
 	return repr;
 }
@@ -146,7 +136,7 @@ Representation RepresentationFinder::represent(
 {
 	dev::eth::Instruction instr = Parser::instructions().at(_instruction);
 	Representation repr;
-	repr.expression = make_shared<Expression>(FunctionalInstruction{
+	repr.expression = make_unique<Expression>(FunctionalInstruction{
 		m_location,
 		instr,
 		{ASTCopier{}.translate(*_argument.expression)}
@@ -163,7 +153,7 @@ Representation RepresentationFinder::represent(
 {
 	dev::eth::Instruction instr = Parser::instructions().at(_instruction);
 	Representation repr;
-	repr.expression = make_shared<Expression>(FunctionalInstruction{
+	repr.expression = make_unique<Expression>(FunctionalInstruction{
 		m_location,
 		instr,
 		{ASTCopier{}.translate(*_arg1.expression), ASTCopier{}.translate(*_arg2.expression)}

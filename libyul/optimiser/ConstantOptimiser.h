@@ -22,9 +22,10 @@
 
 #include <libyul/optimiser/ASTWalker.h>
 #include <libyul/YulString.h>
-
 #include <libyul/Dialect.h>
 #include <libyul/backends/evm/EVMDialect.h>
+#include <libyul/AsmData.h>
+
 #include <liblangutil/SourceLocation.h>
 
 #include <libdevcore/Common.h>
@@ -55,7 +56,7 @@ public:
 
 	struct Representation
 	{
-		std::shared_ptr<Expression> expression;
+		std::unique_ptr<Expression> expression;
 		size_t cost = size_t(-1);
 	};
 
@@ -88,7 +89,7 @@ public:
 private:
 	/// Recursively try to find the cheapest representation of the given number,
 	/// literal if necessary.
-	Representation findRepresentation(dev::u256 const& _value);
+	Representation const& findRepresentation(dev::u256 const& _value);
 
 	Representation represent(dev::u256 const& _value) const;
 	Representation represent(std::string const& _instruction, Representation const& _arg) const;
