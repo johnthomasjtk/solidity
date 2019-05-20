@@ -38,6 +38,10 @@
 #include <liblangutil/SourceReferenceFormatter.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/range/adaptor/reversed.hpp>
+#include <boost/fusion/algorithm/iteration/reverse_fold.hpp>
+#include <boost/fusion/include/reverse_fold.hpp>
+
 
 using namespace std;
 using namespace dev;
@@ -151,19 +155,42 @@ string IRGenerator::generateFunction(FunctionDefinition const& _function)
 
 string IRGenerator::constructorCode(ContractDefinition const& _contract)
 {
-	// TODO initialize state variables in base to derived order.
-	// TODO base constructors
-	// TODO callValueCheck if there is no constructor.
+	using boost::adaptors::reverse;
+
 	if (FunctionDefinition const* constructor = _contract.constructor())
 	{
 		string out;
 		if (!constructor->isPayable())
 			out = callValueCheck();
-		solUnimplementedAssert(constructor->parameters().empty(), "");
-		return move(out) + m_context.functionName(*constructor) + "()\n";
-	}
 
-	return {};
+		solUnimplementedAssert(constructor->parameters().empty(), "");
+		solAssert(!_contract.isLibrary(), "Tried to initialize state variables of library.");
+
+		// Initialization of state variables in base-to-derived order.
+		for (ContractDefinition const* contract : reverse(_contract.annotation().linearizedBaseContracts))
+			for (VariableDeclaration const* variable : contract->stateVariables())
+				out += initializeStateVariable(*variable);
+
+		// TODO base constructors
+
+		out += m_context.functionName(*constructor) + "()\n";
+
+		return out;
+	}
+	else
+		return callValueCheck(); // callValueCheck if there is no constructor.
+}
+
+string IRGenerator::initializeStateVariable(VariableDeclaration const& _varDecl)
+{
+	// something like: SSTORE(storageSlot, expressionValue)
+
+	IRGeneratorForStatements generator{ m_context, m_utils };
+	_varDecl.value()->accept(generator);
+	string const rightHandSide = generator.code();
+
+	IRStorageItem lvalue{m_context, _varDecl};
+	return lvalue.storeValue(rightHandSide, *_varDecl.type());
 }
 
 string IRGenerator::deployCode(ContractDefinition const& _contract)

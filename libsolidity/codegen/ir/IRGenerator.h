@@ -68,6 +68,8 @@ private:
 
 	std::string memoryInit();
 
+	std::string initializeStateVariable(VariableDeclaration const& _varDecl);
+
 	void resetContext(ContractDefinition const& _contract);
 
 	langutil::EVMVersion const m_evmVersion;
